@@ -256,22 +256,18 @@ function portfolio_save_content_meta($post_id) {
 }
 add_action('save_post', 'portfolio_save_content_meta');
 
-function portfolio_seed_featured_image($post_id, $relative_path, $title) {
-	if (has_post_thumbnail($post_id)) {
-		return;
-	}
-
+function portfolio_import_theme_image($relative_path, $title, $parent_id = 0) {
 	$source = get_template_directory() . '/assets/' . ltrim($relative_path, '/');
 
 	if (! is_readable($source)) {
-		return;
+		return 0;
 	}
 
 	$filename = sanitize_file_name(sanitize_title($title) . '-' . wp_basename($source));
 	$upload   = wp_upload_bits($filename, null, file_get_contents($source));
 
 	if (! empty($upload['error'])) {
-		return;
+		return 0;
 	}
 
 	$filetype      = wp_check_filetype($upload['file']);
@@ -282,17 +278,30 @@ function portfolio_seed_featured_image($post_id, $relative_path, $title) {
 			'post_status'    => 'inherit',
 		),
 		$upload['file'],
-		$post_id
+		$parent_id
 	);
 
 	if (is_wp_error($attachment_id)) {
-		return;
+		return 0;
 	}
 
 	require_once ABSPATH . 'wp-admin/includes/image.php';
 	$metadata = wp_generate_attachment_metadata($attachment_id, $upload['file']);
 	wp_update_attachment_metadata($attachment_id, $metadata);
-	set_post_thumbnail($post_id, $attachment_id);
+
+	return (int) $attachment_id;
+}
+
+function portfolio_seed_featured_image($post_id, $relative_path, $title) {
+	if (has_post_thumbnail($post_id)) {
+		return;
+	}
+
+	$attachment_id = portfolio_import_theme_image($relative_path, $title, $post_id);
+
+	if ($attachment_id) {
+		set_post_thumbnail($post_id, $attachment_id);
+	}
 }
 
 function portfolio_seed_page($data) {
@@ -477,3 +486,38 @@ function portfolio_seed_back_office_content() {
 	update_option('portfolio_content_migration_version', $migration_version);
 }
 add_action('init', 'portfolio_seed_back_office_content', 30);
+
+/**
+ * Install the enhanced portrait once and expose it through the Media Library.
+ * Home and About intentionally share one attachment so either page can be
+ * managed from the normal Featured Image panel without duplicating media.
+ */
+function portfolio_install_enhanced_portrait() {
+	$migration_version = '1.0.0';
+
+	if (get_option('portfolio_portrait_migration_version') === $migration_version) {
+		return;
+	}
+
+	$home_page  = get_page_by_path('home', OBJECT, 'page');
+	$about_page = get_page_by_path('about', OBJECT, 'page');
+
+	if (! $home_page || ! $about_page) {
+		return;
+	}
+
+	$attachment_id = portfolio_import_theme_image(
+		'img/anandhu-portrait-enhanced.png',
+		'Anandhu R portrait',
+		$home_page->ID
+	);
+
+	if (! $attachment_id) {
+		return;
+	}
+
+	set_post_thumbnail($home_page->ID, $attachment_id);
+	set_post_thumbnail($about_page->ID, $attachment_id);
+	update_option('portfolio_portrait_migration_version', $migration_version);
+}
+add_action('init', 'portfolio_install_enhanced_portrait', 40);
