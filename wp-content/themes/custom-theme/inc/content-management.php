@@ -61,7 +61,10 @@ function portfolio_content_types() {
 			'public'       => true,
 			'show_in_rest' => true,
 			'menu_icon'    => 'dashicons-portfolio',
-			'supports'     => array('title', 'editor', 'thumbnail', 'excerpt', 'revisions', 'page-attributes'),
+			// Content and summary are presented in the purpose-built Project Details
+			// panel below. Keeping the generic editor/excerpt boxes as well makes the
+			// back office look as though the same information must be entered twice.
+			'supports'     => array('title', 'thumbnail', 'revisions'),
 			'has_archive'  => true,
 			'rewrite'      => array('slug' => 'projects'),
 		)
@@ -117,7 +120,7 @@ function portfolio_content_types() {
 				'show_in_rest'        => true,
 				'exclude_from_search' => true,
 				'menu_icon'           => $details[3],
-				'supports'            => array('title', 'editor', 'excerpt', 'revisions', 'page-attributes'),
+				'supports'            => array('title', 'revisions'),
 			)
 		);
 	}
@@ -222,69 +225,218 @@ function portfolio_get_project_url($project) {
 	return ! empty($project['id']) ? get_permalink($project['id']) : home_url('/#portfolio');
 }
 
-function portfolio_add_content_meta_boxes() {
-	add_meta_box('portfolio-project-details', __('Project Details', 'custom-theme'), 'portfolio_project_meta_box', 'portfolio_project', 'normal', 'high');
-	add_meta_box('portfolio-service-details', __('Service Details', 'custom-theme'), 'portfolio_service_meta_box', 'portfolio_service', 'side');
-	add_meta_box('portfolio-experience-details', __('Experience Details', 'custom-theme'), 'portfolio_experience_meta_box', 'portfolio_experience', 'side');
-	add_meta_box('portfolio-education-details', __('Education Details', 'custom-theme'), 'portfolio_education_meta_box', 'portfolio_education', 'side');
-	add_meta_box('portfolio-page-details', __('Portfolio Section Settings', 'custom-theme'), 'portfolio_page_meta_box', 'page', 'side');
+/**
+ * Portfolio pages which represent editable sections on the one-page site.
+ */
+function portfolio_section_page_slugs() {
+	return array('home', 'about', 'services', 'experience', 'skills', 'education', 'portfolio', 'contact');
 }
-add_action('add_meta_boxes', 'portfolio_add_content_meta_boxes');
 
-function portfolio_meta_field($post, $name, $label, $type = 'text', $description = '') {
-	$value = get_post_meta($post->ID, $name, true);
+/**
+ * Use the classic edit canvas for these small, structured records. The block
+ * editor is useful for articles, but adds an unnecessary second content area
+ * to forms whose fields are deliberately defined below.
+ */
+function portfolio_use_block_editor($use_block_editor, $post_type) {
+	$structured_types = array(
+		'portfolio_project',
+		'portfolio_service',
+		'portfolio_experience',
+		'portfolio_skill',
+		'portfolio_education',
+	);
+
+	return in_array($post_type, $structured_types, true) ? false : $use_block_editor;
+}
+add_filter('use_block_editor_for_post_type', 'portfolio_use_block_editor', 10, 2);
+
+function portfolio_add_content_meta_boxes($post_type, $post) {
+	$boxes = array(
+		'portfolio_project'    => array('portfolio-project-details', __('Project Details', 'custom-theme'), 'portfolio_project_meta_box'),
+		'portfolio_service'    => array('portfolio-service-details', __('Service Details', 'custom-theme'), 'portfolio_service_meta_box'),
+		'portfolio_experience' => array('portfolio-experience-details', __('Experience Details', 'custom-theme'), 'portfolio_experience_meta_box'),
+		'portfolio_skill'      => array('portfolio-skill-details', __('Skill Group Details', 'custom-theme'), 'portfolio_skill_meta_box'),
+		'portfolio_education'  => array('portfolio-education-details', __('Education Details', 'custom-theme'), 'portfolio_education_meta_box'),
+	);
+
+	if (isset($boxes[$post_type])) {
+		$box = $boxes[$post_type];
+		add_meta_box($box[0], $box[1], $box[2], $post_type, 'normal', 'high');
+	}
+
+	if (
+		'page' === $post_type &&
+		$post instanceof WP_Post &&
+		in_array($post->post_name, portfolio_section_page_slugs(), true)
+	) {
+		// On these eight pages the dedicated fields below are the editor. Remove
+		// the generic content canvas for this request so there is only one obvious
+		// place to update the section description.
+		remove_post_type_support('page', 'editor');
+		add_meta_box(
+			'portfolio-page-details',
+			__('Portfolio Section Content', 'custom-theme'),
+			'portfolio_page_meta_box',
+			'page',
+			'normal',
+			'high'
+		);
+	}
+}
+add_action('add_meta_boxes', 'portfolio_add_content_meta_boxes', 10, 2);
+
+function portfolio_admin_panel_intro($text) {
+	echo '<div class="portfolio-admin-intro"><span class="dashicons dashicons-info-outline" aria-hidden="true"></span><p>' . esc_html($text) . '</p></div>';
+}
+
+function portfolio_admin_field($name, $label, $value, $type = 'text', $description = '', $options = array()) {
+	$options = wp_parse_args(
+		$options,
+		array(
+			'class'       => '',
+			'placeholder' => '',
+			'rows'        => 5,
+			'min'         => '',
+		)
+	);
+	$field_id = 'portfolio-field-' . sanitize_html_class($name);
 	?>
-	<p>
-		<label for="<?php echo esc_attr($name); ?>"><strong><?php echo esc_html($label); ?></strong></label>
+	<div class="portfolio-admin-field <?php echo esc_attr($options['class']); ?>">
+		<label for="<?php echo esc_attr($field_id); ?>"><?php echo esc_html($label); ?></label>
 		<?php if ('textarea' === $type) : ?>
-			<textarea class="widefat" rows="6" id="<?php echo esc_attr($name); ?>" name="<?php echo esc_attr($name); ?>"><?php echo esc_textarea($value); ?></textarea>
+			<textarea
+				class="widefat"
+				rows="<?php echo esc_attr($options['rows']); ?>"
+				id="<?php echo esc_attr($field_id); ?>"
+				name="<?php echo esc_attr($name); ?>"
+				placeholder="<?php echo esc_attr($options['placeholder']); ?>"
+			><?php echo esc_textarea($value); ?></textarea>
 		<?php else : ?>
-			<input class="widefat" type="text" id="<?php echo esc_attr($name); ?>" name="<?php echo esc_attr($name); ?>" value="<?php echo esc_attr($value); ?>">
+			<input
+				class="widefat"
+				type="<?php echo esc_attr($type); ?>"
+				id="<?php echo esc_attr($field_id); ?>"
+				name="<?php echo esc_attr($name); ?>"
+				value="<?php echo esc_attr($value); ?>"
+				placeholder="<?php echo esc_attr($options['placeholder']); ?>"
+				<?php echo '' !== $options['min'] ? 'min="' . esc_attr($options['min']) . '"' : ''; ?>
+			>
 		<?php endif; ?>
 		<?php if ($description) : ?>
-			<small><?php echo esc_html($description); ?></small>
+			<p class="description"><?php echo esc_html($description); ?></p>
 		<?php endif; ?>
-	</p>
+	</div>
 	<?php
+}
+
+function portfolio_meta_field($post, $name, $label, $type = 'text', $description = '', $options = array()) {
+	portfolio_admin_field($name, $label, get_post_meta($post->ID, $name, true), $type, $description, $options);
+}
+
+function portfolio_display_order_field($post) {
+	portfolio_admin_field(
+		'portfolio_display_order',
+		__('Display Order', 'custom-theme'),
+		(int) $post->menu_order,
+		'number',
+		__('Lower numbers appear first on the website.', 'custom-theme'),
+		array('min' => '0')
+	);
+}
+
+function portfolio_experience_responsibilities($content) {
+	if (preg_match_all('/<li[^>]*>(.*?)<\/li>/is', (string) $content, $matches)) {
+		return implode("\n", array_map('wp_strip_all_tags', $matches[1]));
+	}
+
+	return trim(wp_strip_all_tags((string) $content));
 }
 
 function portfolio_project_meta_box($post) {
 	wp_nonce_field('portfolio_save_content_meta', 'portfolio_content_meta_nonce');
-	portfolio_meta_field($post, '_portfolio_technologies', __('Technologies', 'custom-theme'), 'text', __('Separate technologies with commas.', 'custom-theme'));
-	portfolio_meta_field($post, '_portfolio_focus', __('Project Focus', 'custom-theme'));
-	portfolio_meta_field($post, '_portfolio_highlights', __('Project Highlights', 'custom-theme'), 'textarea', __('Enter one highlight per line.', 'custom-theme'));
+	portfolio_admin_panel_intro(__('Complete each project field below. Category and cover image are managed in the panels on the right.', 'custom-theme'));
+	echo '<div class="portfolio-admin-grid">';
+	portfolio_meta_field($post, '_portfolio_technologies', __('Technologies', 'custom-theme'), 'text', __('Separate technologies with commas.', 'custom-theme'), array('placeholder' => 'Python, FastAPI, PostgreSQL'));
+	portfolio_meta_field($post, '_portfolio_focus', __('Project Focus', 'custom-theme'), 'text', __('A short description of the project objective.', 'custom-theme'), array('placeholder' => 'Billing and inventory workflows'));
+	portfolio_admin_field('portfolio_post_excerpt', __('Short Description', 'custom-theme'), $post->post_excerpt, 'textarea', __('Shown on the portfolio card and at the top of the project page.', 'custom-theme'), array('class' => 'portfolio-admin-field--full', 'rows' => 3));
+	portfolio_admin_field('portfolio_post_content', __('Project Overview', 'custom-theme'), $post->post_content, 'textarea', __('Describe the project, the problem, and the solution.', 'custom-theme'), array('class' => 'portfolio-admin-field--full', 'rows' => 6));
+	portfolio_meta_field($post, '_portfolio_highlights', __('Project Highlights', 'custom-theme'), 'textarea', __('Enter one highlight per line.', 'custom-theme'), array('class' => 'portfolio-admin-field--full', 'rows' => 6));
+	portfolio_display_order_field($post);
+	echo '</div>';
 }
 
 function portfolio_service_meta_box($post) {
 	wp_nonce_field('portfolio_save_content_meta', 'portfolio_content_meta_nonce');
-	portfolio_meta_field($post, '_portfolio_icon', __('Font Awesome icon class', 'custom-theme'), 'text', __('Example: fas fa-code', 'custom-theme'));
+	portfolio_admin_panel_intro(__('Add the service name above, then complete its website card details here.', 'custom-theme'));
+	echo '<div class="portfolio-admin-grid">';
+	portfolio_admin_field('portfolio_post_excerpt', __('Service Description', 'custom-theme'), $post->post_excerpt, 'textarea', __('Keep this concise; it appears directly below the service name.', 'custom-theme'), array('class' => 'portfolio-admin-field--full', 'rows' => 4));
+	portfolio_meta_field($post, '_portfolio_icon', __('Icon Class', 'custom-theme'), 'text', __('Use a Font Awesome class, for example: fas fa-code.', 'custom-theme'), array('placeholder' => 'fas fa-code'));
+	portfolio_display_order_field($post);
+	echo '</div>';
 }
 
 function portfolio_experience_meta_box($post) {
 	wp_nonce_field('portfolio_save_content_meta', 'portfolio_content_meta_nonce');
-	portfolio_meta_field($post, '_portfolio_company', __('Company', 'custom-theme'));
-	portfolio_meta_field($post, '_portfolio_period', __('Period', 'custom-theme'));
+	portfolio_admin_panel_intro(__('Use the job title field above for the role, then enter the employer, dates, and responsibilities.', 'custom-theme'));
+	echo '<div class="portfolio-admin-grid">';
+	portfolio_meta_field($post, '_portfolio_company', __('Company / Organisation', 'custom-theme'), 'text', '', array('placeholder' => 'Company name'));
+	portfolio_meta_field($post, '_portfolio_period', __('Employment Period', 'custom-theme'), 'text', '', array('placeholder' => 'August 2025 - Present'));
+	portfolio_admin_field('portfolio_experience_responsibilities', __('Key Responsibilities', 'custom-theme'), portfolio_experience_responsibilities($post->post_content), 'textarea', __('Enter one responsibility per line. The website formats them as a list.', 'custom-theme'), array('class' => 'portfolio-admin-field--full', 'rows' => 8));
+	portfolio_display_order_field($post);
+	echo '</div>';
+}
+
+function portfolio_skill_meta_box($post) {
+	wp_nonce_field('portfolio_save_content_meta', 'portfolio_content_meta_nonce');
+	portfolio_admin_panel_intro(__('Use the title field above for the skill group, such as “Backend” or “Databases”.', 'custom-theme'));
+	echo '<div class="portfolio-admin-grid">';
+	portfolio_admin_field('portfolio_post_content', __('Skills / Tools', 'custom-theme'), $post->post_content, 'textarea', __('Separate related skills with commas.', 'custom-theme'), array('class' => 'portfolio-admin-field--full', 'placeholder' => 'FastAPI, Django, REST APIs, SQLAlchemy', 'rows' => 4));
+	portfolio_display_order_field($post);
+	echo '</div>';
 }
 
 function portfolio_education_meta_box($post) {
 	wp_nonce_field('portfolio_save_content_meta', 'portfolio_content_meta_nonce');
-	portfolio_meta_field($post, '_portfolio_institution', __('Institution', 'custom-theme'));
-	portfolio_meta_field($post, '_portfolio_period', __('Period', 'custom-theme'));
+	portfolio_admin_panel_intro(__('Use the title field above for the qualification or degree.', 'custom-theme'));
+	echo '<div class="portfolio-admin-grid">';
+	portfolio_meta_field($post, '_portfolio_institution', __('Institution', 'custom-theme'), 'text', '', array('placeholder' => 'College or university name'));
+	portfolio_meta_field($post, '_portfolio_period', __('Study Period', 'custom-theme'), 'text', '', array('placeholder' => '2023 - 2025'));
+	portfolio_display_order_field($post);
+	echo '</div>';
 }
 
 function portfolio_page_meta_box($post) {
 	wp_nonce_field('portfolio_save_content_meta', 'portfolio_content_meta_nonce');
-	echo '<p>' . esc_html__('Use the page excerpt as the section heading and the page content as its description. A featured image controls the Home or About image.', 'custom-theme') . '</p>';
-	portfolio_meta_field($post, '_portfolio_hero_name', __('Hero Name (Home page only)', 'custom-theme'));
+	$intro = sprintf(__('These fields control the %s section of the homepage.', 'custom-theme'), get_the_title($post));
+	if (in_array($post->post_name, array('home', 'about'), true)) {
+		$intro .= ' ' . __('Use the Featured Image panel to change this section image.', 'custom-theme');
+	}
+	portfolio_admin_panel_intro($intro);
+	echo '<div class="portfolio-admin-grid">';
+	portfolio_admin_field('portfolio_post_excerpt', __('Section Heading', 'custom-theme'), $post->post_excerpt, 'text', __('The large heading displayed for this section.', 'custom-theme'));
+	if ('home' === $post->post_name) {
+		portfolio_meta_field($post, '_portfolio_hero_name', __('Hero Name', 'custom-theme'), 'text', __('The name displayed in the opening section.', 'custom-theme'));
+	}
+	portfolio_admin_field('portfolio_post_content', __('Section Description', 'custom-theme'), $post->post_content, 'textarea', __('The supporting text displayed in this section.', 'custom-theme'), array('class' => 'portfolio-admin-field--full', 'rows' => 6));
+	echo '</div>';
 }
 
 function portfolio_save_content_meta($post_id) {
+	static $saving = false;
+
 	if (
+		$saving ||
 		! isset($_POST['portfolio_content_meta_nonce']) ||
 		! wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['portfolio_content_meta_nonce'])), 'portfolio_save_content_meta') ||
 		(defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) ||
+		wp_is_post_revision($post_id) ||
 		! current_user_can('edit_post', $post_id)
 	) {
+		return;
+	}
+
+	$post = get_post($post_id);
+	if (! $post) {
 		return;
 	}
 
@@ -308,8 +460,225 @@ function portfolio_save_content_meta($post_id) {
 		$value = '_portfolio_highlights' === $field ? sanitize_textarea_field($value) : sanitize_text_field($value);
 		update_post_meta($post_id, $field, $value);
 	}
+
+	$post_update = array('ID' => $post_id);
+
+	if (array_key_exists('portfolio_post_excerpt', $_POST)) {
+		$post_update['post_excerpt'] = sanitize_textarea_field(wp_unslash($_POST['portfolio_post_excerpt']));
+	}
+
+	if (array_key_exists('portfolio_post_content', $_POST)) {
+		$post_update['post_content'] = wp_kses_post(wp_unslash($_POST['portfolio_post_content']));
+	}
+
+	if (array_key_exists('portfolio_experience_responsibilities', $_POST)) {
+		$lines = preg_split('/\r\n|\r|\n/', sanitize_textarea_field(wp_unslash($_POST['portfolio_experience_responsibilities'])));
+		$lines = array_values(array_filter(array_map('trim', $lines)));
+		$post_update['post_content'] = $lines ? '<ul><li>' . implode('</li><li>', array_map('esc_html', $lines)) . '</li></ul>' : '';
+	}
+
+	if (array_key_exists('portfolio_display_order', $_POST)) {
+		$post_update['menu_order'] = max(0, (int) $_POST['portfolio_display_order']);
+	}
+
+	if (count($post_update) > 1) {
+		$saving = true;
+		wp_update_post(wp_slash($post_update));
+		$saving = false;
+	}
 }
 add_action('save_post', 'portfolio_save_content_meta');
+
+function portfolio_title_placeholder($placeholder, $post) {
+	$labels = array(
+		'portfolio_project'    => __('Enter project name', 'custom-theme'),
+		'portfolio_service'    => __('Enter service name', 'custom-theme'),
+		'portfolio_experience' => __('Enter job title / role', 'custom-theme'),
+		'portfolio_skill'      => __('Enter skill group name', 'custom-theme'),
+		'portfolio_education'  => __('Enter qualification / degree', 'custom-theme'),
+	);
+
+	return isset($labels[$post->post_type]) ? $labels[$post->post_type] : $placeholder;
+}
+add_filter('enter_title_here', 'portfolio_title_placeholder', 10, 2);
+
+/**
+ * Make each back-office list show the information an administrator needs to
+ * identify and compare entries without opening them one by one.
+ */
+function portfolio_admin_columns($post_type, $columns) {
+	$checkbox = isset($columns['cb']) ? $columns['cb'] : '<input type="checkbox">';
+	$date     = isset($columns['date']) ? $columns['date'] : __('Date', 'custom-theme');
+
+	$column_sets = array(
+		'portfolio_project' => array(
+			'cb'               => $checkbox,
+			'portfolio_image'  => __('Cover', 'custom-theme'),
+			'title'            => __('Project', 'custom-theme'),
+			'project_category' => __('Category', 'custom-theme'),
+			'technologies'     => __('Technologies', 'custom-theme'),
+			'focus'            => __('Focus', 'custom-theme'),
+			'portfolio_order'  => __('Order', 'custom-theme'),
+			'date'             => $date,
+		),
+		'portfolio_service' => array(
+			'cb'                    => $checkbox,
+			'title'                 => __('Service', 'custom-theme'),
+			'portfolio_description' => __('Description', 'custom-theme'),
+			'icon'                  => __('Icon', 'custom-theme'),
+			'portfolio_order'       => __('Order', 'custom-theme'),
+			'date'                  => $date,
+		),
+		'portfolio_experience' => array(
+			'cb'                    => $checkbox,
+			'title'                 => __('Role', 'custom-theme'),
+			'company'               => __('Company', 'custom-theme'),
+			'period'                => __('Period', 'custom-theme'),
+			'portfolio_description' => __('Responsibilities', 'custom-theme'),
+			'portfolio_order'       => __('Order', 'custom-theme'),
+			'date'                  => $date,
+		),
+		'portfolio_skill' => array(
+			'cb'                    => $checkbox,
+			'title'                 => __('Skill Group', 'custom-theme'),
+			'portfolio_description' => __('Skills / Tools', 'custom-theme'),
+			'portfolio_order'       => __('Order', 'custom-theme'),
+			'date'                  => $date,
+		),
+		'portfolio_education' => array(
+			'cb'                  => $checkbox,
+			'title'               => __('Qualification', 'custom-theme'),
+			'institution'         => __('Institution', 'custom-theme'),
+			'period'              => __('Period', 'custom-theme'),
+			'portfolio_order'     => __('Order', 'custom-theme'),
+			'date'                => $date,
+		),
+	);
+
+	return isset($column_sets[$post_type]) ? $column_sets[$post_type] : $columns;
+}
+
+function portfolio_project_admin_columns($columns) {
+	return portfolio_admin_columns('portfolio_project', $columns);
+}
+
+function portfolio_service_admin_columns($columns) {
+	return portfolio_admin_columns('portfolio_service', $columns);
+}
+
+function portfolio_experience_admin_columns($columns) {
+	return portfolio_admin_columns('portfolio_experience', $columns);
+}
+
+function portfolio_skill_admin_columns($columns) {
+	return portfolio_admin_columns('portfolio_skill', $columns);
+}
+
+function portfolio_education_admin_columns($columns) {
+	return portfolio_admin_columns('portfolio_education', $columns);
+}
+
+add_filter('manage_portfolio_project_posts_columns', 'portfolio_project_admin_columns');
+add_filter('manage_portfolio_service_posts_columns', 'portfolio_service_admin_columns');
+add_filter('manage_portfolio_experience_posts_columns', 'portfolio_experience_admin_columns');
+add_filter('manage_portfolio_skill_posts_columns', 'portfolio_skill_admin_columns');
+add_filter('manage_portfolio_education_posts_columns', 'portfolio_education_admin_columns');
+
+function portfolio_admin_column_content($column, $post_id) {
+	$post = get_post($post_id);
+
+	if (! $post) {
+		return;
+	}
+
+	switch ($column) {
+		case 'portfolio_image':
+			if (has_post_thumbnail($post_id)) {
+				echo get_the_post_thumbnail($post_id, array(64, 48), array('class' => 'portfolio-admin-thumbnail'));
+			} else {
+				echo '<span class="portfolio-admin-empty">' . esc_html__('No image', 'custom-theme') . '</span>';
+			}
+			break;
+		case 'project_category':
+			$terms = get_the_terms($post_id, 'project_category');
+			echo $terms && ! is_wp_error($terms) ? esc_html(implode(', ', wp_list_pluck($terms, 'name'))) : '<span class="portfolio-admin-empty">&mdash;</span>';
+			break;
+		case 'technologies':
+			echo esc_html(get_post_meta($post_id, '_portfolio_technologies', true)) ?: '<span class="portfolio-admin-empty">&mdash;</span>';
+			break;
+		case 'focus':
+			echo esc_html(get_post_meta($post_id, '_portfolio_focus', true)) ?: '<span class="portfolio-admin-empty">&mdash;</span>';
+			break;
+		case 'icon':
+			$icon = get_post_meta($post_id, '_portfolio_icon', true);
+			echo $icon ? '<code>' . esc_html($icon) . '</code>' : '<span class="portfolio-admin-empty">&mdash;</span>';
+			break;
+		case 'company':
+			echo esc_html(get_post_meta($post_id, '_portfolio_company', true)) ?: '<span class="portfolio-admin-empty">&mdash;</span>';
+			break;
+		case 'institution':
+			echo esc_html(get_post_meta($post_id, '_portfolio_institution', true)) ?: '<span class="portfolio-admin-empty">&mdash;</span>';
+			break;
+		case 'period':
+			echo esc_html(get_post_meta($post_id, '_portfolio_period', true)) ?: '<span class="portfolio-admin-empty">&mdash;</span>';
+			break;
+		case 'portfolio_description':
+			$description = 'portfolio_service' === $post->post_type ? $post->post_excerpt : $post->post_content;
+			$description = wp_trim_words(wp_strip_all_tags($description), 16, '&hellip;');
+			echo $description ? esc_html($description) : '<span class="portfolio-admin-empty">&mdash;</span>';
+			break;
+		case 'portfolio_order':
+			echo '<span class="portfolio-admin-order">' . esc_html((string) (int) $post->menu_order) . '</span>';
+			break;
+	}
+}
+add_action('manage_posts_custom_column', 'portfolio_admin_column_content', 10, 2);
+
+function portfolio_sortable_admin_columns($columns) {
+	$columns['portfolio_order'] = 'menu_order';
+	return $columns;
+}
+
+foreach (array('portfolio_project', 'portfolio_service', 'portfolio_experience', 'portfolio_skill', 'portfolio_education') as $portfolio_post_type) {
+	add_filter('manage_edit-' . $portfolio_post_type . '_sortable_columns', 'portfolio_sortable_admin_columns');
+}
+
+function portfolio_order_admin_lists($query) {
+	if (! is_admin() || ! $query->is_main_query()) {
+		return;
+	}
+
+	$post_type = $query->get('post_type');
+	$types     = array('portfolio_project', 'portfolio_service', 'portfolio_experience', 'portfolio_skill', 'portfolio_education');
+
+	if (in_array($post_type, $types, true) && ! $query->get('orderby')) {
+		$query->set('orderby', array('menu_order' => 'ASC', 'date' => 'ASC'));
+		$query->set('order', 'ASC');
+	}
+}
+add_action('pre_get_posts', 'portfolio_order_admin_lists');
+
+function portfolio_admin_assets($hook_suffix) {
+	if (! in_array($hook_suffix, array('post.php', 'post-new.php', 'edit.php'), true)) {
+		return;
+	}
+
+	$screen = get_current_screen();
+	$types  = array('portfolio_project', 'portfolio_service', 'portfolio_experience', 'portfolio_skill', 'portfolio_education', 'page');
+
+	if (! $screen || ! in_array($screen->post_type, $types, true)) {
+		return;
+	}
+
+	$stylesheet = get_template_directory() . '/assets/css/admin.css';
+	wp_enqueue_style(
+		'portfolio-admin',
+		get_template_directory_uri() . '/assets/css/admin.css',
+		array(),
+		file_exists($stylesheet) ? (string) filemtime($stylesheet) : null
+	);
+}
+add_action('admin_enqueue_scripts', 'portfolio_admin_assets');
 
 function portfolio_import_theme_image($relative_path, $title, $parent_id = 0) {
 	$source = get_template_directory() . '/assets/' . ltrim($relative_path, '/');
