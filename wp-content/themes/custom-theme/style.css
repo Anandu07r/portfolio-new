@@ -3,7 +3,7 @@ Theme Name: custom-theme
 Theme URI: https://example.com/
 Author: Portfolio Theme
 Description: A responsive personal portfolio theme with editable profile, services, experience, skills, education, projects and contact sections.
-Version: 1.2.1
+Version: 1.2.2
 Requires at least: 6.2
 Requires PHP: 7.4
 License: GNU General Public License v2 or later
@@ -14,6 +14,7 @@ Text Domain: custom-theme
 	--portfolio-accent: #c9f31d;
 	--portfolio-dark: #1f2928;
 	--portfolio-surface: #f5f7f2;
+	--portfolio-portrait-offset: -9%;
 }
 
 html {
@@ -77,6 +78,7 @@ img {
 	max-height: 700px;
 	object-fit: contain;
 	object-position: center bottom;
+	transform: translateX(var(--portfolio-portrait-offset));
 	filter: drop-shadow(0 24px 28px rgba(31, 41, 40, 0.16));
 }
 
@@ -97,6 +99,7 @@ img {
 	border-radius: 0;
 	object-fit: contain;
 	object-position: center bottom;
+	transform: translateX(var(--portfolio-portrait-offset));
 	box-shadow: none;
 	filter: drop-shadow(0 22px 26px rgba(31, 41, 40, 0.15));
 }
