@@ -7,16 +7,57 @@ if (! defined('ABSPATH')) {
 	exit;
 }
 
+function portfolio_admin_content_labels($plural, $singular, $menu_name = '') {
+	$menu_name = $menu_name ?: $plural;
+
+	return array(
+		'name'                     => $plural,
+		'singular_name'            => $singular,
+		'menu_name'                => $menu_name,
+		'name_admin_bar'           => $singular,
+		'add_new'                  => __('Add New', 'custom-theme'),
+		'add_new_item'             => sprintf(__('Add New %s', 'custom-theme'), $singular),
+		'new_item'                 => sprintf(__('New %s', 'custom-theme'), $singular),
+		'edit_item'                => sprintf(__('Edit %s', 'custom-theme'), $singular),
+		'view_item'                => sprintf(__('View %s', 'custom-theme'), $singular),
+		'view_items'               => sprintf(__('View %s', 'custom-theme'), $plural),
+		'all_items'                => sprintf(__('All %s', 'custom-theme'), $plural),
+		'search_items'             => sprintf(__('Search %s', 'custom-theme'), $plural),
+		'parent_item_colon'        => sprintf(__('Parent %s:', 'custom-theme'), $singular),
+		'not_found'                => sprintf(__('No %s found.', 'custom-theme'), strtolower($plural)),
+		'not_found_in_trash'       => sprintf(__('No %s found in Trash.', 'custom-theme'), strtolower($plural)),
+		'archives'                 => sprintf(__('%s Archives', 'custom-theme'), $singular),
+		'attributes'               => sprintf(__('%s Attributes', 'custom-theme'), $singular),
+		'insert_into_item'         => sprintf(__('Insert into %s', 'custom-theme'), strtolower($singular)),
+		'uploaded_to_this_item'    => sprintf(__('Uploaded to this %s', 'custom-theme'), strtolower($singular)),
+		'filter_items_list'        => sprintf(__('Filter %s list', 'custom-theme'), strtolower($plural)),
+		'items_list_navigation'    => sprintf(__('%s list navigation', 'custom-theme'), $plural),
+		'items_list'               => sprintf(__('%s list', 'custom-theme'), $plural),
+		'item_published'           => sprintf(__('%s published.', 'custom-theme'), $singular),
+		'item_published_privately' => sprintf(__('%s published privately.', 'custom-theme'), $singular),
+		'item_reverted_to_draft'   => sprintf(__('%s reverted to draft.', 'custom-theme'), $singular),
+		'item_scheduled'           => sprintf(__('%s scheduled.', 'custom-theme'), $singular),
+		'item_updated'             => sprintf(__('%s updated.', 'custom-theme'), $singular),
+		'item_link'                => sprintf(__('%s Link', 'custom-theme'), $singular),
+		'item_link_description'    => sprintf(__('A link to a %s.', 'custom-theme'), strtolower($singular)),
+	);
+}
+
 function portfolio_content_types() {
+	$project_labels = portfolio_admin_content_labels(
+		__('Portfolio Projects', 'custom-theme'),
+		__('Portfolio Project', 'custom-theme')
+	);
+	$project_labels['featured_image']        = __('Project Cover Image', 'custom-theme');
+	$project_labels['set_featured_image']    = __('Set project cover image', 'custom-theme');
+	$project_labels['remove_featured_image'] = __('Remove project cover image', 'custom-theme');
+	$project_labels['use_featured_image']    = __('Use as project cover image', 'custom-theme');
+
 	register_post_type(
 		'portfolio_project',
 		array(
-			'labels' => array(
-				'name'          => __('Projects', 'custom-theme'),
-				'singular_name' => __('Project', 'custom-theme'),
-				'add_new_item'  => __('Add New Project', 'custom-theme'),
-				'edit_item'     => __('Edit Project', 'custom-theme'),
-			),
+			'labels'       => $project_labels,
+			'description'  => __('Manage portfolio projects and their public case-study pages.', 'custom-theme'),
 			'public'       => true,
 			'show_in_rest' => true,
 			'menu_icon'    => 'dashicons-portfolio',
@@ -30,7 +71,22 @@ function portfolio_content_types() {
 		'project_category',
 		'portfolio_project',
 		array(
-			'label'        => __('Project Categories', 'custom-theme'),
+			'labels'       => array(
+				'name'              => __('Project Categories', 'custom-theme'),
+				'singular_name'     => __('Project Category', 'custom-theme'),
+				'menu_name'         => __('Project Categories', 'custom-theme'),
+				'search_items'      => __('Search Project Categories', 'custom-theme'),
+				'all_items'         => __('All Project Categories', 'custom-theme'),
+				'parent_item'       => __('Parent Project Category', 'custom-theme'),
+				'parent_item_colon' => __('Parent Project Category:', 'custom-theme'),
+				'edit_item'         => __('Edit Project Category', 'custom-theme'),
+				'view_item'         => __('View Project Category', 'custom-theme'),
+				'update_item'       => __('Update Project Category', 'custom-theme'),
+				'add_new_item'      => __('Add New Project Category', 'custom-theme'),
+				'new_item_name'     => __('New Project Category Name', 'custom-theme'),
+				'not_found'         => __('No project categories found.', 'custom-theme'),
+				'back_to_items'     => __('Back to Project Categories', 'custom-theme'),
+			),
 			'hierarchical' => true,
 			'public'       => true,
 			'show_in_rest' => true,
@@ -39,21 +95,20 @@ function portfolio_content_types() {
 	);
 
 	$managed_types = array(
-		'portfolio_service' => array('Services', 'Service', 'dashicons-admin-tools'),
-		'portfolio_experience' => array('Experience', 'Experience Entry', 'dashicons-businessperson'),
-		'portfolio_skill' => array('Skills', 'Skill Group', 'dashicons-awards'),
-		'portfolio_education' => array('Education', 'Education Entry', 'dashicons-welcome-learn-more'),
+		'portfolio_service'    => array('Services', 'Service', 'Services', 'dashicons-admin-tools'),
+		'portfolio_experience' => array('Experience Entries', 'Experience Entry', 'Work Experience', 'dashicons-businessperson'),
+		'portfolio_skill'      => array('Skill Groups', 'Skill Group', 'Skills', 'dashicons-awards'),
+		'portfolio_education'  => array('Education Entries', 'Education Entry', 'Education', 'dashicons-welcome-learn-more'),
 	);
 
 	foreach ($managed_types as $post_type => $details) {
 		register_post_type(
 			$post_type,
 			array(
-				'labels' => array(
-					'name'          => __($details[0], 'custom-theme'),
-					'singular_name' => __($details[1], 'custom-theme'),
-					'add_new_item'  => sprintf(__('Add New %s', 'custom-theme'), $details[1]),
-					'edit_item'     => sprintf(__('Edit %s', 'custom-theme'), $details[1]),
+				'labels'              => portfolio_admin_content_labels(
+					__($details[0], 'custom-theme'),
+					__($details[1], 'custom-theme'),
+					__($details[2], 'custom-theme')
 				),
 				'public'              => false,
 				'publicly_queryable'  => false,
@@ -61,7 +116,7 @@ function portfolio_content_types() {
 				'show_in_menu'        => true,
 				'show_in_rest'        => true,
 				'exclude_from_search' => true,
-				'menu_icon'           => $details[2],
+				'menu_icon'           => $details[3],
 				'supports'            => array('title', 'editor', 'excerpt', 'revisions', 'page-attributes'),
 			)
 		);
