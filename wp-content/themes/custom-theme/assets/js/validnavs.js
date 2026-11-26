@@ -639,7 +639,7 @@
         var headerH = '70';
         $('html, body').stop().animate({
             scrollTop: $target.offset().top - headerH + "px"
-        }, 50, 'easeInOutExpo');
+        }, window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 650, 'easeInOutExpo');
         event.preventDefault();
     });
 
@@ -648,7 +648,7 @@
         var headerH = '75';
         $('html, body').stop().animate({
             scrollTop: $($anchor.attr('href')).offset().top - headerH + "px"
-        }, 50, 'easeInOutExpo');
+        }, window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 650, 'easeInOutExpo');
         event.preventDefault();
     });
 
