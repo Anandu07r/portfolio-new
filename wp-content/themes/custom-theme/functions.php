@@ -114,6 +114,7 @@ function portfolio_default_projects() {
 }
 
 require_once get_template_directory() . '/inc/content-management.php';
+require_once get_template_directory() . '/inc/mail-settings.php';
 
 function portfolio_setup() {
 	load_theme_textdomain('custom-theme', get_template_directory() . '/languages');
